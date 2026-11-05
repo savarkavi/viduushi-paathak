@@ -8,13 +8,6 @@ gsap.registerPlugin(useGSAP);
 
 const TOP_TEXT = "Viduushi";
 const BOTTOM_TEXT = "Paathak";
-const IMAGE_SOURCES = [
-  "/test-images/test-img-1.jpg",
-  "/test-images/test-img-2.jpg",
-  "/test-images/test-img-3.jpg",
-  "/test-images/test-img-4.jpg",
-  "/test-images/test-img-5.jpg",
-];
 
 const REVEAL_DURATION = 1;
 const CHARACTER_STAGGER = 0.05;
@@ -23,21 +16,22 @@ const CHARACTER_DURATION =
   CHARACTER_STAGGER * (Math.max(TOP_TEXT.length, BOTTOM_TEXT.length) - 1);
 const OUTLINE_DURATION = 0.3;
 
-function preloadImage(source: string) {
+function waitForImage(image: HTMLImageElement) {
   return new Promise<void>((resolve) => {
-    const image = new Image();
-    const finish = () => resolve();
-
-    image.onload = finish;
-    image.onerror = finish;
-    image.src = source;
-
-    if (image.complete) {
+    const finish = () => {
       image
         .decode()
         .catch(() => undefined)
-        .finally(finish);
+        .finally(resolve);
+    };
+
+    if (image.complete) {
+      finish();
+      return;
     }
+
+    image.addEventListener("load", finish, { once: true });
+    image.addEventListener("error", finish, { once: true });
   });
 }
 
@@ -47,8 +41,11 @@ export default function LandingIntro() {
 
   useEffect(() => {
     let isMounted = true;
+    const landingImages = Array.from(
+      document.querySelectorAll<HTMLImageElement>("main img"),
+    );
 
-    Promise.all(IMAGE_SOURCES.map(preloadImage)).then(() => {
+    Promise.all(landingImages.map(waitForImage)).then(() => {
       if (isMounted) {
         setIsLoading(false);
       }
@@ -190,33 +187,14 @@ export default function LandingIntro() {
   );
 
   return (
-    <main ref={containerRef} className="relative w-full bg-[#deddda]">
-      <div className="flex w-full flex-col">
-        {IMAGE_SOURCES.map((source, index) => (
-          <section key={source} className="h-svh w-full overflow-hidden">
-            {/* Images are preloaded together before the intro can reveal. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={source}
-              alt={`Portfolio image ${index + 1}`}
-              className="h-full w-full object-cover"
-            />
-          </section>
-        ))}
-      </div>
-
+    <main ref={containerRef} className="relative z-20 w-full bg-[#deddda]">
       <section
         className={`pointer-events-none fixed inset-0 z-10 overflow-hidden text-[#171717] ${
           isLoading ? "bg-[#deddda]" : ""
         }`}
         aria-label="Site introduction"
       >
-        {isLoading ? (
-          <p
-            role="status"
-            className="absolute left-1/2 top-1/2 m-0 -translate-x-1/2 -translate-y-1/2 text-[12px] leading-none"
-          ></p>
-        ) : (
+        {isLoading ? null : (
           <div aria-hidden="true" className="absolute inset-0">
             <div className="intro-top-panel absolute inset-x-0 top-0 flex h-1/2 min-w-0 items-end justify-center overflow-hidden bg-[#deddda] will-change-transform">
               <p
