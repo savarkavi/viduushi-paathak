@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { Fragment, useCallback, useRef, useState } from "react";
 import Image from "next/image";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -9,18 +9,104 @@ import LandingIntro from "@/components/LandingIntro";
 
 gsap.registerPlugin(useGSAP);
 
-const PORTFOLIO_IMAGES = Array.from(
-  { length: 12 },
-  (_, index) => `/test-images/test-img-${index + 1}.jpg`,
-);
+const PORTFOLIO_ITEMS = [
+  {
+    source: "/test-images/test-img-1.jpg",
+    title: "After Hours",
+    category: "Fashion",
+  },
+  {
+    source: "/test-images/test-img-2.jpg",
+    title: "The New Classic",
+    category: "Editorial",
+  },
+  {
+    source: "/test-images/test-img-3.jpg",
+    title: "Soft Focus",
+    category: "Beauty",
+  },
+  {
+    source: "/test-images/test-img-4.jpg",
+    title: "Made to Move",
+    category: "Advertising",
+  },
+  {
+    source: "/test-images/test-img-5.jpg",
+    title: "Golden Hour",
+    category: "Fashion",
+  },
+  {
+    source: "/test-images/test-img-6.jpg",
+    title: "Quiet Confidence",
+    category: "Editorial",
+  },
+  {
+    source: "/test-images/test-img-7.jpg",
+    title: "Barely There",
+    category: "Beauty",
+  },
+  {
+    source: "/test-images/test-img-8.jpg",
+    title: "In Full Colour",
+    category: "Advertising",
+  },
+  {
+    source: "/test-images/test-img-9.jpg",
+    title: "Modern Muse",
+    category: "Fashion",
+  },
+  {
+    source: "/test-images/test-img-10.jpg",
+    title: "Notes on Form",
+    category: "Editorial",
+  },
+  {
+    source: "/test-images/test-img-11.jpg",
+    title: "Luminous Skin",
+    category: "Beauty",
+  },
+  {
+    source: "/test-images/test-img-12.jpg",
+    title: "Own the Moment",
+    category: "Advertising",
+  },
+] as const;
+
+const COPY_CHARACTER_STAGGER = 0.02;
+const COPY_CHARACTER_DURATION = 0.5;
+
+type AnimatedTextProps = {
+  text: string;
+  characterClassName: string;
+};
+
+function AnimatedText({ text, characterClassName }: AnimatedTextProps) {
+  return text.split(" ").map((word, wordIndex, words) => (
+    <Fragment key={`${word}-${wordIndex}`}>
+      <span aria-hidden="true" className="inline-block">
+        {word.split("").map((character, characterIndex) => (
+          <span
+            key={`${character}-${characterIndex}`}
+            className={`${characterClassName} inline-block will-change-transform`}
+          >
+            {character}
+          </span>
+        ))}
+      </span>
+      {wordIndex < words.length - 1 ? " " : null}
+    </Fragment>
+  ));
+}
 
 export default function Home() {
   const homeRef = useRef<HTMLElement>(null);
   const backgroundImageRefs = useRef<HTMLDivElement[]>([]);
+  const centerCopyRef = useRef<HTMLDivElement>(null);
   const [backgroundImage, setBackgroundImage] = useState({
     currentIndex: 0,
     previousIndex: 0,
   });
+  const currentPortfolioItem = PORTFOLIO_ITEMS[backgroundImage.currentIndex];
 
   const updateBackgroundImage = useCallback((index: number) => {
     setBackgroundImage((image) => {
@@ -36,13 +122,22 @@ export default function Home() {
     () => {
       const incomingBackground =
         backgroundImageRefs.current[backgroundImage.currentIndex];
+      const centerCopy = centerCopyRef.current;
 
       if (
         !incomingBackground ||
+        !centerCopy ||
         backgroundImage.currentIndex === backgroundImage.previousIndex
       ) {
         return;
       }
+
+      const titleCharacters = centerCopy.querySelectorAll<HTMLElement>(
+        ".portfolio-title-char",
+      );
+      const categoryCharacters = centerCopy.querySelectorAll<HTMLElement>(
+        ".portfolio-category-char",
+      );
 
       const media = gsap.matchMedia();
 
@@ -52,19 +147,54 @@ export default function Home() {
           reduceMotion: "(prefers-reduced-motion: reduce)",
         },
         (mediaContext) => {
-          gsap.fromTo(
-            incomingBackground,
-            {
-              clipPath: "circle(0% at 50% 50%)",
-              scale: 1.08,
-            },
-            {
-              clipPath: "circle(100% at 50% 50%)",
-              scale: 1,
-              duration: mediaContext.conditions?.reduceMotion ? 0 : 1.2,
-              ease: "power3.out",
-            },
-          );
+          const duration = mediaContext.conditions?.reduceMotion ? 0 : 1.2;
+          const copyDuration = mediaContext.conditions?.reduceMotion
+            ? 0
+            : COPY_CHARACTER_DURATION;
+          const copyStagger = mediaContext.conditions?.reduceMotion
+            ? 0
+            : COPY_CHARACTER_STAGGER;
+
+          gsap
+            .timeline()
+            .set(centerCopy, { autoAlpha: 0 })
+            .fromTo(
+              incomingBackground,
+              {
+                clipPath: "circle(0% at 50% 50%)",
+                scale: 1.08,
+              },
+              {
+                clipPath: "circle(100% at 50% 50%)",
+                scale: 1,
+                duration,
+                ease: "power3.out",
+              },
+            )
+            .addLabel("reveal-copy", "-=0.5")
+            .set(centerCopy, { autoAlpha: 1 }, "reveal-copy")
+            .fromTo(
+              titleCharacters,
+              { yPercent: 120 },
+              {
+                yPercent: 0,
+                duration: copyDuration,
+                ease: "power4.out",
+                stagger: { each: copyStagger, from: "start" },
+              },
+              "reveal-copy",
+            )
+            .fromTo(
+              categoryCharacters,
+              { yPercent: 120 },
+              {
+                yPercent: 0,
+                duration: copyDuration,
+                ease: "power4.out",
+                stagger: { each: copyStagger, from: "start" },
+              },
+              "reveal-copy",
+            );
         },
       );
 
@@ -84,7 +214,7 @@ export default function Home() {
     >
       <LandingIntro />
       <div className="absolute inset-0" aria-label="Portfolio image collage">
-        {PORTFOLIO_IMAGES.map((source, index) => {
+        {PORTFOLIO_ITEMS.map(({ source, title }, index) => {
           const isCurrent = index === backgroundImage.currentIndex;
           const isPrevious = index === backgroundImage.previousIndex;
 
@@ -106,7 +236,7 @@ export default function Home() {
             >
               <Image
                 src={source}
-                alt={isCurrent ? "Selected portfolio image" : ""}
+                alt={isCurrent ? title : ""}
                 fill
                 preload={index === 0}
                 sizes="100vw"
@@ -118,8 +248,33 @@ export default function Home() {
       </div>
 
       <div className="pointer-events-none absolute inset-0 bg-[#171717]/20" />
+      <div
+        ref={centerCopyRef}
+        className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6 text-center mix-blend-difference text-[#deddda]"
+      >
+        <div key={currentPortfolioItem.source}>
+          <h1
+            aria-label={currentPortfolioItem.title}
+            className="font-main overflow-hidden text-5xl leading-none font-normal sm:text-7xl lg:text-9xl"
+          >
+            <AnimatedText
+              text={currentPortfolioItem.title}
+              characterClassName="portfolio-title-char"
+            />
+          </h1>
+          <p
+            aria-label={`In ${currentPortfolioItem.category}`}
+            className="mt-3 overflow-hidden text-xs font-medium tracking-[0.2em] uppercase sm:text-sm"
+          >
+            <AnimatedText
+              text={`In ${currentPortfolioItem.category}`}
+              characterClassName="portfolio-category-char"
+            />
+          </p>
+        </div>
+      </div>
       <ImagesDial
-        images={PORTFOLIO_IMAGES}
+        images={PORTFOLIO_ITEMS.map(({ source }) => source)}
         onImageAtTwelveChange={updateBackgroundImage}
       />
     </main>
