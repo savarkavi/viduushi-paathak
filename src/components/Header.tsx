@@ -11,13 +11,13 @@ export default function Header() {
         <span>VGP</span>
       </Link>
 
-      <div className="flex items-center gap-2 text-sm uppercase tracking-wide sm:text-base">
-        <span>Menu</span>
-        <span
-          aria-hidden="true"
-          className="size-2.5 rounded-full border border-current bg-transparent sm:size-3"
-        />
-      </div>
+      <nav
+        aria-label="Main navigation"
+        className="pointer-events-auto flex items-center gap-4 text-sm uppercase tracking-wide sm:text-base"
+      >
+        <Link href="/">Work+</Link>
+        <Link href="/about">About</Link>
+      </nav>
     </header>
   );
 }
