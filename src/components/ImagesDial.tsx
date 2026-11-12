@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import Image from "next/image";
+import { PiMouseScrollThin } from "react-icons/pi";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { Observer } from "gsap/Observer";
@@ -22,6 +23,7 @@ export default function ImagesDial({
 }: ImagesDialProps) {
   const dialRef = useRef<HTMLDivElement>(null);
   const orbitRef = useRef<HTMLDivElement>(null);
+  const scrollIconRef = useRef<HTMLDivElement>(null);
   const imageFrameRefs = useRef<HTMLDivElement[]>([]);
 
   useGSAP(
@@ -46,9 +48,31 @@ export default function ImagesDial({
         },
         (mediaContext) => {
           const reduceMotion = mediaContext.conditions?.reduceMotion;
+          const scrollIcon = scrollIconRef.current;
           let rotation = 0;
           let isAnimating = false;
           let hasSteppedThisGesture = false;
+
+          if (scrollIcon && !reduceMotion) {
+            gsap
+              .timeline({ repeat: -1, repeatDelay: 0.16 })
+              .fromTo(
+                scrollIcon,
+                { y: 0, autoAlpha: 0 },
+                {
+                  y: 1,
+                  autoAlpha: 1,
+                  duration: 0.12,
+                  ease: "power1.out",
+                },
+              )
+              .to(scrollIcon, { y: 12, duration: 0.78, ease: "none" })
+              .to(
+                scrollIcon,
+                { autoAlpha: 0, duration: 0.18, ease: "power1.in" },
+                0.78,
+              );
+          }
 
           const rotateOneStep = createContextSafe((direction: number) => {
             if (isAnimating || hasSteppedThisGesture) {
@@ -175,6 +199,21 @@ export default function ImagesDial({
             </div>
           );
         })}
+      </div>
+
+      <div className="absolute left-1/2 top-[35%] z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center text-[#deddda]">
+        <div className="relative h-7 w-4">
+          <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[#deddda]/50" />
+          <div
+            ref={scrollIconRef}
+            className="absolute left-0 top-0.5 h-4 w-4 text-[#deddda]/85 will-change-transform"
+          >
+            <PiMouseScrollThin aria-hidden="true" className="h-full w-full" />
+          </div>
+        </div>
+        <span className="mt-2.5 whitespace-nowrap text-[10px] leading-none font-bold uppercase tracking-[0.04em] text-[#deddda]/75">
+          Scroll down
+        </span>
       </div>
     </div>
   );

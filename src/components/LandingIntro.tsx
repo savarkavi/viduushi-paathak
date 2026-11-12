@@ -187,16 +187,16 @@ export default function LandingIntro() {
   );
 
   return (
-    <main ref={containerRef} className="relative z-50 w-full bg-[#deddda]">
+    <main ref={containerRef} className="relative z-50 w-full bg-[#F5F0E8]">
       <section
         className={`font-main pointer-events-none fixed inset-0 z-20 overflow-hidden text-[#292824] ${
-          isLoading ? "bg-[#deddda]" : ""
+          isLoading ? "bg-[#F5F0E8]" : ""
         }`}
         aria-label="Site introduction"
       >
         {isLoading ? null : (
           <div aria-hidden="true" className="absolute inset-0">
-            <div className="intro-top-panel absolute inset-x-0 top-0 flex h-1/2 min-w-0 items-end justify-center overflow-hidden bg-[#deddda] will-change-transform">
+            <div className="intro-top-panel absolute inset-x-0 top-0 flex h-1/2 min-w-0 items-end justify-center overflow-hidden bg-[#F5F0E8] will-change-transform">
               <p
                 aria-label={TOP_TEXT}
                 className="m-0 mb-2 overflow-hidden px-6 whitespace-nowrap text-8xl sm:text-[10rem] lg:text-[16rem] xl:text-[19rem] 2xl:text-[26rem] leading-none font-normal uppercase"
@@ -220,7 +220,7 @@ export default function LandingIntro() {
               />
             </div>
 
-            <div className="intro-bottom-panel absolute inset-x-0 bottom-0 flex h-1/2 min-w-0 items-start justify-center overflow-hidden bg-[#deddda] will-change-transform">
+            <div className="intro-bottom-panel absolute inset-x-0 bottom-0 flex h-1/2 min-w-0 items-start justify-center overflow-hidden bg-[#F5F0E8] will-change-transform">
               <p
                 aria-label={BOTTOM_TEXT}
                 className="m-0 mt-2 overflow-hidden px-6 whitespace-nowrap text-8xl sm:text-[10rem] lg:text-[16rem] xl:text-[19rem] 2xl:text-[26rem] leading-none font-normal uppercase"
