@@ -5,8 +5,8 @@ import Image from "next/image";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import ImagesDial from "@/components/ImagesDial";
-import LandingIntro from "@/components/LandingIntro";
 import { PORTFOLIO_ITEMS } from "@/data/portfolio";
+import IntroLanding from "@/components/IntroLanding";
 
 gsap.registerPlugin(useGSAP);
 
@@ -150,7 +150,7 @@ export default function Home() {
       ref={homeRef}
       className="relative h-svh w-full overflow-hidden bg-[#171717]"
     >
-      <LandingIntro />
+      <IntroLanding />
       <div className="absolute inset-0" aria-label="Portfolio image collage">
         {PORTFOLIO_ITEMS.map(({ source, title }, index) => {
           const isCurrent = index === backgroundImage.currentIndex;
