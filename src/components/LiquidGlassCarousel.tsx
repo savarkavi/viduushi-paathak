@@ -6,12 +6,14 @@ import {
   type ReactNode,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
   useEffect,
   useId,
   useRef,
   useState,
 } from "react";
 import * as THREE from "three";
+import { useRouter } from "next/navigation";
 import { PORTFOLIO_ITEMS } from "@/data/portfolio";
 
 type WebGLErrorBoundaryProps = {
@@ -60,6 +62,8 @@ function WebGLFallback({
 export interface LiquidGlassCarouselItem {
   src: string;
   title: string;
+  slug: string;
+  category: string;
   /** Width / height. Measured from the image when omitted. */
   aspect?: number;
 }
@@ -76,15 +80,16 @@ export interface LiquidGlassCarouselProps {
   className?: string;
   style?: CSSProperties;
   onActiveChange?: (index: number) => void;
-  onFocusChange?: (focused: boolean) => void;
 }
 
 const PORTRAIT_ASPECT = 3 / 4;
 
 export const liquidGlassCarouselDefaultItems: LiquidGlassCarouselItem[] =
-  PORTFOLIO_ITEMS.map(({ source, title }) => ({
+  PORTFOLIO_ITEMS.map(({ source, title, slug, category }) => ({
     src: source,
     title,
+    slug,
+    category: category.toLowerCase(),
     aspect: PORTRAIT_ASPECT,
   }));
 
@@ -129,7 +134,6 @@ const FOCUS = {
   focusEase: "power3.out",
   stagger: 0.06,
   dropDist: 1.4,
-  centerScale: 1.18,
   lensFade: 0.85,
 };
 
@@ -273,12 +277,10 @@ vec3 discLens(vec2 center, float aspectCorrect, out float outA) {
     col = mix(bcol / btw, col, rimMask);
   }
 
-  col *= mix(0.91, 1.0, smoothstep(0.0, 0.38, shapeND));
-
   float r2 = shapeND * shapeND * 0.25;
   float gs = max(uNovaSize * uGlow * 0.003, 0.004);
   float nova = exp(-r2 / gs) + exp(-r2 / (gs * 7.0)) * 0.18;
-  nova *= uWhiteGlow * (uGlow / 17.0) * 1.15;
+  nova *= uWhiteGlow * (uGlow / 17.0) * 1.15 * smoothstep(0.0, 0.08, shapeND);
   col += vec3(nova);
 
   float dC = shapeND * 0.5;
@@ -366,7 +368,6 @@ type Source = {
 };
 
 export type LiquidGlassCarouselHandle = {
-  closeFocus: () => void;
   next: () => void;
   previous: () => void;
   destroy: () => void;
@@ -402,7 +403,7 @@ function createCarousel(
     background: string;
     entry: boolean;
     onActiveChange: (index: number) => void;
-    onFocusChange: (open: boolean) => void;
+    onItemClick: (srcIndex: number) => void;
     onEntryDone: (done: boolean) => void;
   },
 ): LiquidGlassCarouselHandle | null {
@@ -633,7 +634,7 @@ function createCarousel(
     anim: null as gsap.core.Timeline | null,
   };
   const drop = new Array(REPEATS * sources.length).fill(0);
-  let focusScale = 1;
+  const focusScale = 1;
   const lastCenterX: Array<number | undefined> = new Array(
     REPEATS * sources.length,
   );
@@ -999,8 +1000,7 @@ function createCarousel(
     const hit = panelAtPointer(p.x, p.y);
     if (!hit) return;
     if (centeredPanel && hit.poolIdx === centeredPanel.poolIdx) {
-      pendingFocus = null;
-      openFocus();
+      options.onItemClick(hit.srcIndex);
       return;
     }
     userInteracted = true;
@@ -1009,127 +1009,6 @@ function createCarousel(
     snapped = true;
     pendingFocus = { srcIndex: hit.srcIndex };
     setView(false);
-  }
-
-  function openFocus() {
-    if (focusState.active || !centeredPanel) return;
-    const src = sources[centeredPanel.srcIndex];
-    if (!src?.tex) return;
-
-    focusState.active = true;
-    focusState.srcIndex = centeredPanel.srcIndex;
-    const focusPoolIdx = centeredPanel.poolIdx;
-    focusState.poolIdx = focusPoolIdx;
-    target = centerForIndex(nearestIndex(scroll));
-
-    const focusX = lastCenterX[focusPoolIdx] || 0;
-    const others = pool
-      .map((_, idx) => ({ idx, x: lastCenterX[idx] }))
-      .filter((o) => o.idx !== focusPoolIdx && o.x !== undefined)
-      .map((o) => ({ idx: o.idx, dist: Math.abs((o.x ?? 0) - focusX) }))
-      .sort((a, b) => a.dist - b.dist);
-
-    let rank = 0;
-    let prevDist = -1;
-    const ranked = others.map((o) => {
-      if (prevDist >= 0 && o.dist - prevDist > 1) rank += 1;
-      prevDist = o.dist;
-      return { idx: o.idx, rank };
-    });
-
-    for (const key of LENS_FX_KEYS) {
-      lensFxFull[key] = lensUniforms[key].value;
-    }
-
-    if (focusState.anim) focusState.anim.kill();
-    const scaleProxy = { v: focusScale };
-    const tl = gsap.timeline();
-    tl.to(
-      focusState,
-      { lensFx: 0, duration: FOCUS.lensFade, ease: "power3.out" },
-      0,
-    );
-    tl.to(
-      scaleProxy,
-      {
-        v: FOCUS.centerScale,
-        duration: FOCUS.focusDuration,
-        ease: FOCUS.focusEase,
-        onUpdate() {
-          focusScale = scaleProxy.v;
-        },
-      },
-      0,
-    );
-    ranked.forEach((o) => {
-      tl.to(
-        drop,
-        { [o.idx]: 1, duration: FOCUS.cardDuration, ease: FOCUS.cardEase },
-        o.rank * FOCUS.stagger,
-      );
-    });
-    focusState.anim = tl;
-    setView(false);
-    options.onFocusChange(true);
-  }
-
-  function closeFocus() {
-    if (!focusState.active) return;
-    if (focusState.anim) focusState.anim.kill();
-
-    const focusX = lastCenterX[focusState.poolIdx] || 0;
-    const others = pool
-      .map((_, idx) => ({ idx, x: lastCenterX[idx] }))
-      .filter((o) => o.x !== undefined && (drop[o.idx] || 0) > 0)
-      .map((o) => ({ idx: o.idx, dist: Math.abs((o.x ?? 0) - focusX) }))
-      .sort((a, b) => b.dist - a.dist);
-
-    let rank = 0;
-    let prevDist = -1;
-    const ranked = others.map((o) => {
-      if (prevDist >= 0 && prevDist - o.dist > 1) rank += 1;
-      prevDist = o.dist;
-      return { idx: o.idx, rank };
-    });
-
-    options.onFocusChange(false);
-    const scaleProxy = { v: focusScale };
-    const tl = gsap.timeline({
-      onComplete: () => {
-        focusState.active = false;
-        focusState.srcIndex = -1;
-        updateCursor();
-      },
-    });
-    tl.to(
-      focusState,
-      { lensFx: 1, duration: FOCUS.lensFade * 0.8, ease: "power3.inOut" },
-      0,
-    );
-    tl.to(
-      scaleProxy,
-      {
-        v: 1,
-        duration: FOCUS.focusDuration * 0.85,
-        ease: FOCUS.focusEase,
-        onUpdate() {
-          focusScale = scaleProxy.v;
-        },
-      },
-      0,
-    );
-    ranked.forEach((o) => {
-      tl.to(
-        drop,
-        {
-          [o.idx]: 0,
-          duration: FOCUS.cardDuration * 0.85,
-          ease: FOCUS.cardEase,
-        },
-        o.rank * FOCUS.stagger * 0.7,
-      );
-    });
-    focusState.anim = tl;
   }
 
   function playEntry() {
@@ -1298,7 +1177,7 @@ function createCarousel(
         const pf = pendingFocus;
         pendingFocus = null;
         if (centeredPanel && centeredPanel.srcIndex === pf.srcIndex) {
-          openFocus();
+          options.onItemClick(pf.srcIndex);
         }
       }
     }
@@ -1312,11 +1191,7 @@ function createCarousel(
       : isTablet
         ? aspect * 0.42
         : LENS.sizeX;
-    lensUniforms.uSizeY.value = isMobile
-      ? 0.56
-      : isTablet
-        ? 0.46
-        : LENS.sizeY;
+    lensUniforms.uSizeY.value = isMobile ? 0.56 : isTablet ? 0.46 : LENS.sizeY;
     lensUniforms.uAspect.value = aspect;
     lensUniforms.uTime.value = performance.now() * 0.001;
     const rad = (a: number) => (a * Math.PI) / 180;
@@ -1498,7 +1373,6 @@ function createCarousel(
   }
 
   return {
-    closeFocus,
     next: () => step(1),
     previous: () => step(-1),
     destroy,
@@ -1520,7 +1394,6 @@ export function LiquidGlassCarousel({
   className,
   style,
   onActiveChange,
-  onFocusChange,
 }: LiquidGlassCarouselProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
@@ -1528,25 +1401,49 @@ export function LiquidGlassCarousel({
   const categoryRef = useRef<HTMLHeadingElement>(null);
   const titleRef = useRef<HTMLParagraphElement>(null);
   const counterRef = useRef<HTMLParagraphElement>(null);
-  const revealPlayedRef = useRef(false);
   const [active, setActive] = useState(0);
-  const [focused, setFocused] = useState(false);
-  const [entryDone, setEntryDone] = useState(!entry);
   const [failed, setFailed] = useState(false);
   const labelId = useId();
   const liveId = useId();
   const current = items[active] ?? items[0];
   const onActiveChangeRef = useRef(onActiveChange);
-  const onFocusChangeRef = useRef(onFocusChange);
+  const router = useRouter();
+
+  const handleItemClick = useCallback(
+    (srcIndex: number) => {
+      const item = items[srcIndex];
+      if (!item) return;
+      router.push(`/${item.category}/${item.slug}`);
+    },
+    [items, router],
+  );
 
   useEffect(() => {
     onActiveChangeRef.current = onActiveChange;
-    onFocusChangeRef.current = onFocusChange;
-  }, [onActiveChange, onFocusChange]);
+  }, [onActiveChange]);
 
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount || items.length === 0) return;
+
+    const title = titleRef.current;
+    const counter = counterRef.current;
+    const category = categoryRef.current;
+    const textElements = [category, title, counter].filter(
+      (el): el is NonNullable<typeof el> => el !== null,
+    );
+    const primaryText = [category, title].filter(
+      (el): el is NonNullable<typeof el> => el !== null,
+    );
+    const reduced = prefersReducedMotion();
+    const shouldAnimateEntry = entry && !reduced;
+
+    // Immediately hide and center text before WebGL entry begins
+    gsap.killTweensOf(textElements);
+    gsap.set(textElements, {
+      xPercent: -50,
+      autoAlpha: shouldAnimateEntry ? 0 : 1,
+    });
 
     const engine = createCarousel(mount, cursorRef.current, {
       items,
@@ -1558,80 +1455,65 @@ export function LiquidGlassCarousel({
         setActive(index);
         onActiveChangeRef.current?.(index);
       },
-      onFocusChange: (open) => {
-        setFocused(open);
-        onFocusChangeRef.current?.(open);
+      onItemClick: handleItemClick,
+      onEntryDone: (done) => {
+        gsap.killTweensOf(textElements);
+        if (!done) {
+          if (shouldAnimateEntry) {
+            gsap.set(textElements, { autoAlpha: 0 });
+          }
+          return;
+        }
+
+        if (!shouldAnimateEntry) {
+          gsap.set(textElements, { autoAlpha: 1 });
+          return;
+        }
+
+        if (primaryText.length > 0) {
+          gsap.fromTo(
+            primaryText,
+            { autoAlpha: 0 },
+            { autoAlpha: 1, duration: 1.6, ease: "power2.out" },
+          );
+        }
+        if (counter) {
+          gsap.fromTo(
+            counter,
+            { autoAlpha: 0 },
+            {
+              autoAlpha: 1,
+              duration: 1.6,
+              ease: "power2.out",
+              delay: 0.18,
+            },
+          );
+        }
       },
-      onEntryDone: setEntryDone,
     });
+
     if (!engine) {
       setFailed(true);
       return;
     }
+
     engineRef.current = engine;
     return () => {
+      // Reset text to hidden on unmount so cached route restores never flash visible text
+      gsap.killTweensOf(textElements);
+      gsap.set(textElements, { autoAlpha: 0 });
       engine.destroy();
       engineRef.current = null;
     };
-  }, [items, panelHeight, gap, background, entry]);
-
-  useEffect(() => {
-    const title = titleRef.current;
-    const counter = counterRef.current;
-    const category = categoryRef.current;
-    if (!title || !counter) return;
-
-    const reduced = prefersReducedMotion();
-    const elements = category ? [category, title, counter] : [title, counter];
-    gsap.set(elements, { xPercent: -50 });
-
-    if (!entryDone && entry && !reduced) {
-      gsap.set(elements, { autoAlpha: 0 });
-      revealPlayedRef.current = false;
-      return;
-    }
-
-    const y = focused ? window.innerHeight * 0.05 : 0;
-    if (entryDone && !focused && !revealPlayedRef.current) {
-      revealPlayedRef.current = true;
-      gsap.fromTo(
-        category ? [category, title] : title,
-        { autoAlpha: 0 },
-        { autoAlpha: 1, duration: reduced ? 0 : 1.6, ease: "power2.out" },
-      );
-      gsap.fromTo(
-        counter,
-        { autoAlpha: 0 },
-        {
-          autoAlpha: 1,
-          duration: reduced ? 0 : 1.6,
-          ease: "power2.out",
-          delay: reduced ? 0 : 0.18,
-        },
-      );
-      return;
-    }
-
-    if (category) {
-      gsap.to(category, {
-        y: -y,
-        autoAlpha: focused ? 0 : 1,
-        duration: reduced ? 0 : 0.4,
-        ease: "power3.out",
-      });
-    }
-    gsap.to(title, {
-      y,
-      autoAlpha: 1,
-      duration: reduced ? 0 : 0.4,
-      ease: "power3.out",
-    });
-    gsap.to(counter, {
-      autoAlpha: focused ? 0 : 1,
-      duration: reduced ? 0 : 0.4,
-      ease: "power3.out",
-    });
-  }, [focused, entryDone, entry, categoryTitle]);
+  }, [
+    items,
+    categoryTitle,
+    panelHeight,
+    gap,
+    background,
+    entry,
+    handleItemClick,
+  ]);
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === "ArrowRight") {
@@ -1640,9 +1522,6 @@ export function LiquidGlassCarousel({
     } else if (event.key === "ArrowLeft") {
       event.preventDefault();
       engineRef.current?.previous();
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      engineRef.current?.closeFocus();
     }
   };
 
@@ -1666,7 +1545,6 @@ export function LiquidGlassCarousel({
       </p>
       <p id={liveId} className="sr-only" aria-live="polite">
         {current?.title ?? ""}, {pad(active + 1)} of {pad(items.length)}
-        {focused ? ", focused" : ""}
       </p>
 
       <WebGLErrorBoundary
@@ -1690,12 +1568,12 @@ export function LiquidGlassCarousel({
       {categoryTitle && (
         <h1
           ref={categoryRef}
-          className="font-main pointer-events-none absolute top-[20%] sm:top-[12%] left-1/2 z-10 m-0 text-center text-4xl tracking-[0.12em] whitespace-nowrap text-black uppercase opacity-0 sm:text-7xl"
+          className="font-main pointer-events-none absolute top-[20%] left-1/2 z-10 m-0 text-center text-4xl tracking-[0.12em] whitespace-nowrap text-black uppercase opacity-0 sm:top-[12%] sm:text-7xl"
         >
           {categoryTitle}
         </h1>
       )}
-      <div className="pointer-events-none absolute bottom-[20%] sm:bottom-[12%] left-1/2 z-10 m-0 flex flex-col gap-2">
+      <div className="pointer-events-none absolute bottom-[20%] left-1/2 z-10 m-0 flex flex-col gap-2 sm:bottom-[12%]">
         <p
           ref={titleRef}
           className="text-center text-[15px] font-medium tracking-[-0.02em] text-black uppercase opacity-0 sm:text-lg"
@@ -1716,19 +1594,6 @@ export function LiquidGlassCarousel({
       >
         View
       </div>
-
-      <button
-        type="button"
-        onClick={() => engineRef.current?.closeFocus()}
-        aria-label="Close focused project"
-        className="absolute top-[4.5%] right-[4%] z-20 text-[13px] font-medium text-black mix-blend-exclusion transition-opacity duration-300"
-        style={{
-          opacity: focused ? 1 : 0,
-          pointerEvents: focused ? "auto" : "none",
-        }}
-      >
-        Close
-      </button>
     </div>
   );
 }
