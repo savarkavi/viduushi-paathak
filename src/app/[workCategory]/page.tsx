@@ -23,8 +23,8 @@ export default function Page({
   params: Promise<{ workCategory: string }>;
 }) {
   return (
-    <main className="h-svh w-full overflow-hidden bg-background">
-      <Suspense fallback={<div className="h-full w-full bg-background" />}>
+    <main className="h-svh w-full overflow-hidden bg-white">
+      <Suspense fallback={<div className="h-full w-full bg-white" />}>
         <CategoryCarousel params={params} />
       </Suspense>
     </main>
